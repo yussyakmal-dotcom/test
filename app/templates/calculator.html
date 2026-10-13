@@ -1,0 +1,67 @@
+{% extends "base.html" %}{% block title %}Kalkulator harga jual{% endblock %}
+{% block content %}
+<h1>Kalkulator harga jual produk</h1>
+<div class="card">
+<form method="get" action="/calculator">
+<label>Cari produk yang sudah punya BOM (nama atau SKU)</label>
+<input type="text" name="q" value="{{ q }}" placeholder="mis. arem arem" {{ 'autofocus' if not product and not is_new }}>
+<p><button>Cari</button> <a href="/calculator?new=1"><button type="button" class="sec">Produk baru (resep kosong)</button></a></p>
+</form>
+{% if fresh %}<p class="mut">Data BOM dan harga per {{ fresh|dt }}.</p>{% endif %}
+</div>
+
+{% if matches is not none %}
+<div class="card"><h2>Pilih produk</h2>
+<table><tr><th>Produk</th><th>SKU</th></tr>
+{% for m in matches %}<tr><td><a href="/calculator?pid={{ m.product_id }}">{{ m.name }}</a></td><td>{{ m.sku or '' }}</td></tr>
+{% else %}<tr><td colspan="2" class="mut">Tidak ada produk ber-BOM dengan kata itu.</td></tr>{% endfor %}</table></div>
+{% endif %}
+
+{% if res %}
+{% if uom_warn %}<div class="flash err">{{ uom_warn }} baris BOM memakai satuan yang berbeda dari satuan stok produknya, padahal kebijakan Anda satuan kecil. Qty pada baris itu tidak sebanding; periksa di Odoo (lihat daftar lengkap lewat view dwh.v_bom_uom_check).</div>{% endif %}
+<div class="card">
+<h2>{% if product %}{{ product.name }}{% if product.sku %} <span class="mut">[{{ product.sku }}]</span>{% endif %}{% else %}Produk baru{% endif %}</h2>
+{% if product %}
+<p class="mut">BOM utama: {{ product.code or '-' }}. Biaya dihitung per 1 unit produk jadi.
+Tampilan: {% if mode == 'full' %}<b>bahan baku akhir</b> | <a href="/calculator?pid={{ product.product_id }}&mode=direct">komponen langsung</a>
+{% else %}<a href="/calculator?pid={{ product.product_id }}&mode=full">bahan baku akhir</a> | <b>komponen langsung</b>{% endif %}
+(mengganti tampilan mengembalikan angka dari Odoo).</p>
+{% else %}<p class="mut">Isi bahan, qty per 1 unit, dan harga per satuan secara manual.</p>{% endif %}
+
+<form method="post" action="/calculator">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="pid" value="{{ product.product_id if product else '' }}">
+<input type="hidden" name="mode" value="{{ mode }}">
+<table><tr><th>Bahan</th><th>Qty per unit</th><th>Harga per satuan (Rp)</th><th class="n">Biaya (Rp)</th></tr>
+{% for r in rows %}<tr>
+<td><input type="text" name="name" value="{{ r.name }}"></td>
+<td><input type="text" name="qty" value="{{ r.qty|plain }}" style="max-width:110px"></td>
+<td><input type="text" name="price" value="{{ r.price|plain }}" style="max-width:140px">{% if not r.price %} <span class="mut">harga kosong</span>{% endif %}</td>
+<td class="n">{{ r.line|idr }}</td></tr>{% endfor %}
+{% for i in range(5) %}<tr><td><input type="text" name="name" placeholder="bahan tambahan"></td>
+<td><input type="text" name="qty" style="max-width:110px"></td><td><input type="text" name="price" style="max-width:140px"></td><td></td></tr>{% endfor %}
+</table>
+<div class="row" style="margin-top:8px">
+<div><label>Biaya lain per unit (Rp)</label><input type="text" name="extra" value="{{ p.extra|plain }}"></div>
+<div><label>Margin yang diinginkan (%)</label><input type="text" name="margin" value="{{ p.margin|plain }}"></div>
+<div><label>PPN (%)</label><input type="text" name="ppn" value="{{ p.ppn|plain }}"></div>
+<div><label>Pembulatan ke atas</label><select name="round_to">
+{% for v, t in [(0,'tanpa'),(100,'Rp 100'),(500,'Rp 500'),(1000,'Rp 1.000')] %}<option value="{{ v }}" {{ 'selected' if p.round_to == v }}>{{ t }}</option>{% endfor %}</select></div>
+</div>
+<p><button>Hitung</button></p>
+<p class="mut">Margin dihitung atas harga jual. Gunakan angka biasa (15000 atau 12,5), tanpa pemisah ribuan. Ubah qty atau harga untuk simulasi; baris kosong diabaikan.</p>
+</form></div>
+
+<div class="card"><h2>Hasil</h2>
+<table>
+<tr><td>Biaya bahan</td><td class="n">{{ res.bahan|idr }}</td></tr>
+<tr><td>Biaya lain</td><td class="n">{{ res.extra|idr }}</td></tr>
+<tr><th>HPP per unit</th><th class="n">{{ res.hpp|idr }}</th></tr>
+<tr><td>Harga jual sebelum PPN (margin {{ res.margin|num }}%)</td><td class="n">{{ res.harga_sebelum_ppn|idr }}</td></tr>
+<tr><th>Harga jual{% if res.ppn %} termasuk PPN {{ res.ppn|num }}%{% endif %}{% if p.round_to %} (dibulatkan){% endif %}</th><th class="n" style="font-size:18px">Rp {{ res.harga_final|idr }}</th></tr>
+<tr><td>Laba per unit</td><td class="n">{{ res.laba|idr }}</td></tr>
+<tr><td>Margin riil setelah pembulatan</td><td class="n">{{ res.margin_riil|num }}%</td></tr>
+<tr><td>Setara markup atas HPP</td><td class="n">{{ res.markup|num }}%</td></tr>
+</table></div>
+{% endif %}
+{% endblock %}

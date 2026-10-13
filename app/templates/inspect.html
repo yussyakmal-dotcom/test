@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% block title %}Inspeksi Odoo{% endblock %}
+{% block content %}
+<h1>Inspeksi struktur Odoo</h1>
+<div class="card">
+<form method="get" action="/admin/inspect">
+<div class="row">
+<div><label>Model teknis</label><input type="text" name="model" value="{{ model }}" placeholder="mis. uom.uom"></div>
+<div><label>Filter nama/label field (opsional)</label><input type="text" name="q" value="{{ q }}" placeholder="mis. relative, product, x_"></div>
+</div>
+<label><input type="checkbox" name="sample" value="1" {{ 'checked' if sample }}> Tampilkan 3 contoh record</label>
+<p><button>Lihat</button></p>
+<p class="mut">Hanya membaca (fields_get dan search_read maksimal 3 record). Contoh record bisa memuat data bisnis; jangan dibagikan sembarangan.</p>
+</form>
+{% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+</div>
+{% if fields is not none %}
+<div class="card"><h2>{{ fields|length }} field</h2>
+<table><tr><th>Nama teknis</th><th>Label</th><th>Tipe</th><th>Relasi</th><th>Disimpan</th></tr>
+{% for f in fields %}<tr><td><code>{{ f.name }}</code></td><td>{{ f.string }}</td><td>{{ f.type }}</td><td>{{ f.relation or '' }}</td><td>{{ 'ya' if f.store else 'tidak' }}</td></tr>
+{% else %}<tr><td colspan="5" class="mut">Tidak ada field yang cocok.</td></tr>{% endfor %}</table></div>
+{% endif %}
+{% if sample_json %}<div class="card"><h2>Contoh record</h2><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px">{{ sample_json }}</pre></div>{% endif %}
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "ro_layout.html" %}
+{% block title %}Master Jadwal{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Master Jadwal</h1>
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Tambah jadwal</div>
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="nKode">KODE (opsional)</label>
+        <input type="number" class="form-control" id="nKode" min="1" max="9999" placeholder="otomatis">
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label" for="nNama">JADWAL</label>
+        <input type="text" class="form-control" id="nNama" maxlength="60" placeholder="mis. KIRIM MALAM">
+      </div>
+      <div class="col-12 col-md-4"><button class="btn btn-primary" type="button" id="btnAdd">Tambah</button></div>
+    </div>
+    <div class="form-text">Nama otomatis ditulis huruf besar. Kode tidak bisa diubah setelah dibuat.</div>
+  </div>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th style="width:90px">KODE</th><th>JADWAL</th><th class="text-end" style="width:110px">Dipakai RO</th><th style="width:170px"></th></tr></thead>
+      <tbody id="jBody"><tr><td colspan="4" class="text-body-secondary">Memuat...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+<p class="text-body-secondary small mt-2">Jadwal yang sudah dipakai RO tidak bisa dihapus, tetapi namanya boleh diubah.</p>
+{% endblock %}
+{% block script %}
+{% raw %}
+(() => {
+  'use strict';
+  const { $, el, api, showAlert } = window.ROUI;
+
+  async function load() {
+    try { render(await api('/api/ro/master/jadwal')); } catch (e) { showAlert(e.message); }
+  }
+  function render(rows) {
+    const body = $('jBody');
+    body.textContent = '';
+    if (!rows.length) {
+      body.appendChild(el('tr', {}, el('td', { colspan: 4, class: 'text-body-secondary', text: 'Belum ada jadwal.' })));
+      return;
+    }
+    rows.forEach((r) => body.appendChild(viewRow(r)));
+  }
+  function viewRow(r) {
+    const tr = el('tr', {});
+    tr.append(
+      el('td', { text: r.kode_jadwal }),
+      el('td', { text: r.jadwal }),
+      el('td', { class: 'text-end', text: r.dipakai }),
+      el('td', { class: 'text-end text-nowrap' },
+        el('button', { type: 'button', class: 'btn btn-sm btn-outline-secondary me-1', text: 'Ubah', onclick: () => editRow(tr, r) }),
+        el('button', { type: 'button', class: 'btn btn-sm btn-outline-danger', text: 'Hapus', onclick: () => remove(r) })));
+    return tr;
+  }
+  function editRow(tr, r) {
+    const inp = el('input', { type: 'text', class: 'form-control form-control-sm', value: r.jadwal, maxlength: 60 });
+    const save = async () => {
+      try {
+        await api('/api/ro/master/jadwal/' + r.kode_jadwal, { method: 'PUT', body: JSON.stringify({ jadwal: inp.value }) });
+        showAlert('Jadwal diperbarui.', 'success');
+        load();
+      } catch (e) { showAlert(e.message); }
+    };
+    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') save(); if (ev.key === 'Escape') tr.replaceWith(viewRow(r)); });
+    tr.textContent = '';
+    tr.append(
+      el('td', { text: r.kode_jadwal }),
+      el('td', {}, inp),
+      el('td', { class: 'text-end', text: r.dipakai }),
+      el('td', { class: 'text-end text-nowrap' },
+        el('button', { type: 'button', class: 'btn btn-sm btn-primary me-1', text: 'Simpan', onclick: save }),
+        el('button', { type: 'button', class: 'btn btn-sm btn-outline-secondary', text: 'Batal', onclick: () => tr.replaceWith(viewRow(r)) })));
+    inp.focus();
+  }
+  async function remove(r) {
+    if (!confirm('Hapus jadwal "' + r.jadwal + '"?')) return;
+    try {
+      await api('/api/ro/master/jadwal/' + r.kode_jadwal, { method: 'DELETE' });
+      showAlert('Jadwal dihapus.', 'success');
+      load();
+    } catch (e) { showAlert(e.message); }
+  }
+  async function add() {
+    const kode = $('nKode').value.trim();
+    const body = { jadwal: $('nNama').value };
+    if (kode !== '') body.kode_jadwal = parseInt(kode, 10);
+    try {
+      await api('/api/ro/master/jadwal', { method: 'POST', body: JSON.stringify(body) });
+      $('nKode').value = ''; $('nNama').value = '';
+      showAlert('Jadwal ditambahkan.', 'success');
+      load();
+    } catch (e) { showAlert(e.message); }
+  }
+  $('btnAdd').addEventListener('click', add);
+  $('nNama').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') add(); });
+  load();
+})();
+{% endraw %}
+{% endblock %}

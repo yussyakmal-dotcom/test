@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Tema Desktop — Odoo BI{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Tema Desktop</h1>
+  <p>Gunakan pilihan tema di atas untuk langsung mengubah tampilan seluruh aplikasi.</p>
+  <div class="theme-preview">
+    <article><h2>Ikuti sistem</h2><p>Menyesuaikan mode terang atau gelap perangkat secara otomatis.</p></article>
+    <article><h2>Terang</h2><p>Latar cerah untuk aktivitas sehari-hari.</p></article>
+    <article><h2>Gelap</h2><p>Latar gelap dengan teks yang mudah dibaca.</p></article>
+    <article><h2>Biru Laut</h2><p>Warna biru lembut dengan aksen laut.</p></article>
+  </div>
+  <p data-theme-status role="status" aria-live="polite"></p>
+  <p class="mut">Pilihan disimpan di browser ini, tetap berlaku setelah muat ulang atau login ulang, dan tersinkron antar-tab. Perangkat atau browser lain memiliki pilihan terpisah. Jika penyimpanan browser diblokir, tema hanya berlaku pada halaman saat ini.</p>
+</section>
+{% endblock %}

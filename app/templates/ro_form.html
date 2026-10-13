@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="id" data-bs-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf }}">
+<title>Request Order Toko</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { padding-bottom: 88px; }
+  .grid-wrap { max-height: 62vh; overflow-y: auto; }
+  .grid-wrap thead th { position: sticky; top: 0; background: var(--bs-body-bg); z-index: 1; box-shadow: 0 1px 0 var(--bs-border-color); }
+  .qty-input { max-width: 140px; margin-left: auto; }
+  tr.filled > td { background: var(--bs-success-bg-subtle); }
+  .actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1030; }
+</style>
+{% include "theme_assets.html" %}
+</head>
+<body data-ro-id="{{ ro_id if ro_id else '' }}">
+
+<nav class="navbar bg-body-tertiary border-bottom">
+  <div class="container-xl">
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="/">&larr; Dashboard</a>
+      <span class="navbar-brand mb-0 h6">Request Order Toko</span>
+      {% if env_label %}<span class="badge {{ 'text-bg-danger' if env_label.lower().startswith('prod') else 'text-bg-warning' }}">{{ env_label|upper }}</span>{% endif %}
+      {% if user.role == 'admin' %}<a class="btn btn-sm btn-outline-primary" href="/ro/master/template">Master Template</a><a class="btn btn-sm btn-outline-primary" href="/ro/master/jadwal">Master Jadwal</a>{% endif %}
+    </div>
+    <form class="d-flex align-items-center gap-2 m-0" method="post" action="/logout">
+      <span class="text-body-secondary small d-none d-sm-inline">{{ user.username }}</span>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-sm btn-outline-secondary">Keluar</button>
+    </form>
+  </div>
+</nav>
+{% include "theme_picker.html" %}
+
+<main class="container-xl my-3">
+  <div id="alertBox" role="alert"></div>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+    <h1 class="h4 mb-0" id="roTitle">RO baru</h1>
+    <span class="badge text-bg-secondary d-none" id="lockBadge">TERKUNCI</span>
+  </div>
+  <div class="alert alert-secondary d-none" id="lockBanner">
+    RO ini sudah <b>KIRIM DATA</b>, sehingga semua isian dikunci dan tidak bisa diubah. Untuk membuat RO lain, klik <b>RO Baru</b>.
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Header RO</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-md-6 col-lg-4">
+          <label class="form-label" for="fToko">TOKO</label>
+          <select class="form-select" id="fToko"></select>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+          <label class="form-label" for="fPesan">TGL PESAN</label>
+          <input type="date" class="form-control" id="fPesan">
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+          <label class="form-label" for="fKirim">TGL KIRIM</label>
+          <input type="date" class="form-control" id="fKirim">
+          <div class="invalid-feedback">Minimal TGL PESAN + 1 hari.</div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+          <label class="form-label" for="fDapur">DAPUR</label>
+          <select class="form-select" id="fDapur"></select>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+          <label class="form-label" for="fJadwal">JADWAL</label>
+          <select class="form-select" id="fJadwal"></select>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+          <label class="form-label" for="fStatus">STATUS</label>
+          <select class="form-select" id="fStatus"></select>
+          <div class="form-text text-warning-emphasis d-none" id="statusHint">Saat disimpan dengan status KIRIM DATA, RO dikunci dan tidak bisa diubah lagi.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <span class="fw-semibold">Produk</span>
+      <span class="small text-body-secondary">Terisi: <b id="cntFilled">0</b> dari <span id="cntTotal">0</span></span>
+    </div>
+    <div class="card-body">
+      <div class="row g-2 align-items-center mb-2">
+        <div class="col-12 col-md-6">
+          <input type="search" class="form-control" id="fCari" placeholder="Cari kode atau nama produk" autocomplete="off">
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="fTerisi">
+            <label class="form-check-label" for="fTerisi">Tampilkan hanya yang sudah terisi</label>
+          </div>
+        </div>
+      </div>
+      <div class="grid-wrap border rounded">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead><tr><th style="width:150px">KODE ODOO</th><th>NAMA PRODUK</th><th class="text-end" style="width:170px">QTY</th></tr></thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+        <div class="text-center text-body-secondary p-4" id="gridEmpty">Pilih DAPUR untuk menampilkan produk.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="collapse" id="listCard">
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">RO terbaru</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead><tr><th>#</th><th>Toko</th><th>Tgl kirim</th><th>Dapur</th><th>Jadwal</th><th class="text-end">Item</th><th>Status</th></tr></thead>
+          <tbody id="listBody"><tr><td colspan="7" class="text-body-secondary">Memuat...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="actions border-top bg-body p-2">
+  <div class="container-xl d-flex flex-wrap gap-2 justify-content-between">
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/ro">RO Baru</a>
+      <button class="btn btn-outline-secondary" type="button" data-toggle-list="1" id="btnList">Daftar RO</button>
+    </div>
+    <button class="btn btn-primary px-4" type="button" id="btnSave">Simpan</button>
+  </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+{% raw %}
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const st = { master: null, roId: null, savedStatus: 1, prevDapur: '', kirimTouched: false, dirty: false };
+
+
+  // ---------------------------------------------------------------- util
+  function addDays(iso, n) {
+    const d = new Date(iso + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function fmtDate(iso) {
+    if (!iso) return '-';
+    const p = String(iso).slice(0, 10).split('-');
+    return p[2] + '-' + p[1] + '-' + p[0];
+  }
+  function showAlert(msg, kind) {
+    const box = $('alertBox');
+    box.textContent = '';
+    const div = document.createElement('div');
+    div.className = 'alert alert-' + (kind || 'danger') + ' alert-dismissible';
+    div.textContent = msg;
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'btn-close'; x.setAttribute('aria-label', 'Tutup');
+    x.addEventListener('click', () => { box.textContent = ''; });
+    div.appendChild(x);
+    box.appendChild(div);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (kind === 'success') setTimeout(() => { if (div.isConnected) box.textContent = ''; }, 6000);
+  }
+  async function api(url, opts) {
+    opts = opts || {};
+    const headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    if (opts.body) { headers['Content-Type'] = 'application/json'; headers['X-CSRF-Token'] = csrf; }
+    let res;
+    try {
+      res = await fetch(url, Object.assign({}, opts, { headers: headers, credentials: 'same-origin' }));
+    } catch (e) {
+      throw new Error('Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.');
+    }
+    if (res.redirected && /\/login/.test(res.url)) {
+      window.location.href = '/login';
+      throw new Error('Sesi berakhir. Silakan login ulang.');
+    }
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.indexOf('application/json') >= 0 ? await res.json() : { detail: await res.text() };
+    if (!res.ok) {
+      let msg = data.detail;
+      if (Array.isArray(msg)) msg = msg.map((x) => x.msg || JSON.stringify(x)).join('; ');
+      throw new Error(msg || ('Kesalahan ' + res.status));
+    }
+    return data;
+  }
+  function fillSelect(sel, rows, vKey, tKey, placeholder) {
+    sel.textContent = '';
+    if (placeholder) {
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = placeholder;
+      sel.appendChild(o);
+    }
+    rows.forEach((r) => {
+      const o = document.createElement('option');
+      o.value = String(r[vKey]); o.textContent = r[tKey];
+      sel.appendChild(o);
+    });
+  }
+
+  // ---------------------------------------------------------------- tanggal
+  function validateKirim() {
+    const p = $('fPesan').value, k = $('fKirim').value;
+    const ok = !!(p && k && k >= addDays(p, 1));
+    $('fKirim').classList.toggle('is-invalid', !ok);
+    return ok;
+  }
+  function onPesanChange() {
+    const p = $('fPesan').value;
+    if (!p) return;
+    const min = addDays(p, 1);
+    $('fKirim').min = min;
+    if (!st.kirimTouched) $('fKirim').value = addDays(p, 2);
+    else if ($('fKirim').value < min) $('fKirim').value = min;
+    validateKirim();
+    st.dirty = true;
+  }
+  function onKirimChange() { st.kirimTouched = true; validateKirim(); st.dirty = true; }
+
+  // ---------------------------------------------------------------- grid
+  function makeRow(kode, nama, qty, extra) {
+    const tr = document.createElement('tr');
+    tr.dataset.kode = kode;
+    tr.dataset.search = (kode + ' ' + nama).toLowerCase();
+    const td1 = document.createElement('td'); td1.className = 'text-nowrap'; td1.textContent = kode;
+    const td2 = document.createElement('td'); td2.textContent = nama;
+    if (extra) {
+      const b = document.createElement('span');
+      b.className = 'badge text-bg-warning ms-2'; b.textContent = 'di luar template';
+      td2.appendChild(b);
+    }
+    const td3 = document.createElement('td'); td3.className = 'text-end';
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = '0'; inp.step = 'any'; inp.inputMode = 'decimal';
+    inp.className = 'form-control form-control-sm text-end qty-input';
+    inp.setAttribute('aria-label', 'Qty ' + nama);
+    if (qty) { inp.value = qty; tr.classList.add('filled'); }
+    inp.addEventListener('input', onQtyInput);
+    inp.addEventListener('keydown', onQtyKey);
+    inp.addEventListener('focus', () => inp.select());
+    td3.appendChild(inp);
+    tr.append(td1, td2, td3);
+    return tr;
+  }
+  function renderGrid(products, qtyMap, extras) {
+    const body = $('gridBody');
+    body.textContent = '';
+    const frag = document.createDocumentFragment();
+    products.forEach((p) => frag.appendChild(makeRow(p.kode_odoo, p.nama_produk, qtyMap[p.kode_odoo], false)));
+    (extras || []).forEach((p) => frag.appendChild(makeRow(p.kode_odoo, p.nama_produk, p.qty, true)));
+    body.appendChild(frag);
+    $('gridEmpty').textContent = $('fDapur').value ? 'Dapur ini belum punya produk di master template.' : 'Pilih DAPUR untuk menampilkan produk.';
+    $('fCari').value = ''; $('fTerisi').checked = false;
+    updateCount();
+  }
+  function onQtyInput(ev) {
+    const tr = ev.target.closest('tr');
+    const v = parseFloat(ev.target.value);
+    tr.classList.toggle('filled', isFinite(v) && v > 0);
+    st.dirty = true;
+    updateCount();
+  }
+  function onQtyKey(ev) {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const inputs = Array.from(document.querySelectorAll('#gridBody tr:not(.d-none) .qty-input'));
+    const i = inputs.indexOf(ev.target);
+    if (i >= 0 && inputs[i + 1]) inputs[i + 1].focus();
+  }
+  function updateCount() {
+    const rows = document.querySelectorAll('#gridBody tr');
+    $('cntTotal').textContent = rows.length;
+    $('cntFilled').textContent = document.querySelectorAll('#gridBody tr.filled').length;
+    $('gridEmpty').classList.toggle('d-none', rows.length > 0);
+  }
+  function hasFilled() { return document.querySelectorAll('#gridBody tr.filled').length > 0; }
+  function applyFilter() {
+    const words = $('fCari').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const only = $('fTerisi').checked;
+    document.querySelectorAll('#gridBody tr').forEach((tr) => {
+      const okQ = words.every((w) => tr.dataset.search.indexOf(w) >= 0);
+      tr.classList.toggle('d-none', !(okQ && (!only || tr.classList.contains('filled'))));
+    });
+  }
+  function collectItems() {
+    const items = [];
+    document.querySelectorAll('#gridBody tr').forEach((tr) => {
+      const raw = tr.querySelector('.qty-input').value;
+      const q = parseFloat(raw);
+      if (raw !== '' && isFinite(q) && q > 0) items.push({ kode_odoo: tr.dataset.kode, qty: q });
+    });
+    return items;
+  }
+  async function onDapurChange() {
+    const sel = $('fDapur');
+    if (hasFilled() && !confirm('Mengganti DAPUR akan menghapus semua QTY yang sudah diisi. Lanjutkan?')) {
+      sel.value = st.prevDapur;
+      return;
+    }
+    st.prevDapur = sel.value;
+    st.dirty = true;
+    if (!sel.value) { renderGrid([], {}); return; }
+    sel.disabled = true;
+    try {
+      const prods = await api('/api/ro/products?kode_dapur=' + encodeURIComponent(sel.value));
+      renderGrid(prods, {});
+    } catch (e) {
+      showAlert(e.message);
+      renderGrid([], {});
+    } finally {
+      sel.disabled = st.savedStatus === 2;
+    }
+  }
+
+  // ---------------------------------------------------------------- lock / judul
+  function setLocked(lock) {
+    ['fToko', 'fPesan', 'fKirim', 'fDapur', 'fJadwal', 'fStatus', 'fCari', 'fTerisi'].forEach((id) => {
+      if (id === 'fCari' || id === 'fTerisi') return;     // pencarian tetap boleh dipakai saat terkunci
+      $(id).disabled = lock;
+    });
+    document.querySelectorAll('#gridBody .qty-input').forEach((i) => { i.disabled = lock; });
+    $('btnSave').disabled = lock;
+    $('btnSave').textContent = lock ? 'Terkunci' : 'Simpan';
+    $('lockBanner').classList.toggle('d-none', !lock);
+    $('lockBadge').classList.toggle('d-none', !lock);
+  }
+  function updateTitle() {
+    const nm = (st.master.status.find((s) => s.kode === st.savedStatus) || {}).nama || '';
+    $('roTitle').textContent = st.roId ? ('RO #' + st.roId + ' (' + nm + ')') : 'RO baru';
+  }
+
+  // ---------------------------------------------------------------- validasi dan simpan
+  function validateAll() {
+    const errs = [];
+    [['fToko', 'TOKO'], ['fDapur', 'DAPUR'], ['fJadwal', 'JADWAL']].forEach((x) => {
+      const bad = !$(x[0]).value;
+      $(x[0]).classList.toggle('is-invalid', bad);
+      if (bad) errs.push('Pilih ' + x[1] + '.');
+    });
+    if (!$('fPesan').value) errs.push('Isi TGL PESAN.');
+    else if (!validateKirim()) errs.push('TGL KIRIM minimal TGL PESAN + 1 hari.');
+    let neg = false;
+    document.querySelectorAll('#gridBody .qty-input').forEach((i) => {
+      const v = parseFloat(i.value);
+      const bad = i.value !== '' && (!isFinite(v) || v < 0);
+      i.classList.toggle('is-invalid', bad);
+      if (bad) neg = true;
+    });
+    if (neg) errs.push('QTY tidak boleh negatif atau bukan angka.');
+    if ($('fStatus').value === '2' && collectItems().length === 0) errs.push('Isi minimal satu QTY sebelum KIRIM DATA.');
+    return errs;
+  }
+  async function save() {
+    if (st.savedStatus === 2) return;
+    const errs = validateAll();
+    if (errs.length) { showAlert(errs.join(' ')); return; }
+    const status = parseInt($('fStatus').value, 10);
+    if (status === 2 && !confirm('Setelah KIRIM DATA, seluruh isian dikunci dan tidak bisa diubah lagi. Lanjutkan?')) return;
+    const body = {
+      id: st.roId,
+      kode_toko: parseInt($('fToko').value, 10),
+      tgl_pesan: $('fPesan').value,
+      tgl_kirim: $('fKirim').value,
+      kode_dapur: $('fDapur').value,
+      kode_jadwal: parseInt($('fJadwal').value, 10),
+      status: status,
+      items: collectItems()
+    };
+    const btn = $('btnSave');
+    btn.disabled = true; btn.textContent = 'Menyimpan...';
+    try {
+      const r = await api('/api/ro', { method: 'POST', body: JSON.stringify(body) });
+      st.roId = r.id; st.savedStatus = r.status; st.dirty = false;
+      history.replaceState(null, '', '/ro?id=' + r.id);
+      setLocked(r.status === 2);
+      updateTitle();
+      showAlert('RO #' + r.id + ' tersimpan (' + r.status_nama + ', ' + r.jumlah_item + ' item).', 'success');
+      loadList();
+    } catch (e) {
+      showAlert(e.message);
+      btn.disabled = false; btn.textContent = 'Simpan';
+    }
+  }
+
+  // ---------------------------------------------------------------- muat RO lama dan daftar
+  async function loadExisting(id) {
+    try {
+      const ro = await api('/api/ro/' + encodeURIComponent(id));
+      st.roId = ro.id; st.savedStatus = ro.status; st.kirimTouched = true;
+      $('fToko').value = String(ro.kode_toko);
+      $('fPesan').value = ro.tgl_pesan;
+      $('fKirim').min = addDays(ro.tgl_pesan, 1);
+      $('fKirim').value = ro.tgl_kirim;
+      $('fDapur').value = ro.kode_dapur;
+      $('fJadwal').value = String(ro.kode_jadwal);
+      $('fStatus').value = String(ro.status);
+      st.prevDapur = ro.kode_dapur;
+      const qtyMap = {};
+      ro.items.forEach((i) => { qtyMap[i.kode_odoo] = i.qty; });
+      const prods = await api('/api/ro/products?kode_dapur=' + encodeURIComponent(ro.kode_dapur));
+      const known = new Set(prods.map((p) => p.kode_odoo));
+      renderGrid(prods, qtyMap, ro.items.filter((i) => !known.has(i.kode_odoo)));
+      validateKirim();
+      setLocked(ro.status === 2);
+      updateTitle();
+      st.dirty = false;
+    } catch (e) {
+      showAlert(e.message);
+    }
+  }
+  async function loadList() {
+    const body = $('listBody');
+    try {
+      const rows = await api('/api/ro?limit=30');
+      body.textContent = '';
+      if (!rows.length) {
+        const tr = document.createElement('tr'), td = document.createElement('td');
+        td.colSpan = 7; td.className = 'text-body-secondary'; td.textContent = 'Belum ada RO.';
+        tr.appendChild(td); body.appendChild(tr); return;
+      }
+      rows.forEach((r) => {
+        const tr = document.createElement('tr');
+        const cell = (txt, cls) => { const td = document.createElement('td'); td.textContent = txt; if (cls) td.className = cls; return td; };
+        const tdId = document.createElement('td');
+        const a = document.createElement('a'); a.href = '/ro?id=' + r.id; a.textContent = '#' + r.id;
+        tdId.appendChild(a);
+        const tdSt = document.createElement('td');
+        const b = document.createElement('span');
+        b.className = 'badge ' + (r.status === 2 ? 'text-bg-success' : 'text-bg-secondary');
+        b.textContent = r.status === 2 ? 'KIRIM DATA' : 'DRAFT';
+        tdSt.appendChild(b);
+        tr.append(tdId, cell(r.toko), cell(fmtDate(r.tgl_kirim)), cell(r.dapur), cell(r.jadwal),
+                  cell(String(r.jumlah_item), 'text-end'), tdSt);
+        body.appendChild(tr);
+      });
+    } catch (e) {
+      body.textContent = '';
+      const tr = document.createElement('tr'), td = document.createElement('td');
+      td.colSpan = 7; td.className = 'text-danger'; td.textContent = e.message;
+      tr.appendChild(td); body.appendChild(tr);
+    }
+  }
+
+  // ---------------------------------------------------------------- init
+  async function init() {
+    try {
+      st.master = await api('/api/ro/master');
+    } catch (e) { showAlert(e.message); return; }
+    fillSelect($('fToko'), st.master.toko, 'kode_toko', 'toko', '-- pilih toko --');
+    fillSelect($('fDapur'), st.master.dapur, 'kode_dapur', 'dapur', '-- pilih dapur --');
+    fillSelect($('fJadwal'), st.master.jadwal, 'kode_jadwal', 'jadwal', '-- pilih jadwal --');
+    fillSelect($('fStatus'), st.master.status, 'kode', 'nama', null);
+    $('fStatus').value = '1';
+    $('fPesan').value = st.master.today;
+    $('fKirim').min = addDays(st.master.today, 1);
+    $('fKirim').value = addDays(st.master.today, 2);
+
+    $('fPesan').addEventListener('change', onPesanChange);
+    $('fKirim').addEventListener('change', onKirimChange);
+    $('fDapur').addEventListener('change', onDapurChange);
+    ['fToko', 'fJadwal'].forEach((id) => $(id).addEventListener('change', () => { st.dirty = true; $(id).classList.remove('is-invalid'); }));
+    $('fStatus').addEventListener('change', () => {
+      $('statusHint').classList.toggle('d-none', $('fStatus').value !== '2');
+      st.dirty = true;
+    });
+    $('fCari').addEventListener('input', applyFilter);
+    $('fTerisi').addEventListener('change', applyFilter);
+    $('btnSave').addEventListener('click', save);
+    $('btnList').addEventListener('click', () => {
+      const el = $('listCard');
+      el.classList.toggle('show');
+      if (el.classList.contains('show')) loadList();
+    });
+    window.addEventListener('beforeunload', (ev) => {
+      if (st.dirty && st.savedStatus !== 2) { ev.preventDefault(); ev.returnValue = ''; }
+    });
+
+    renderGrid([], {});
+    const id = document.body.dataset.roId;
+    if (id) await loadExisting(id);
+    else updateTitle();
+  }
+  init();
+})();
+{% endraw %}
+</script>
+</body>
+</html>

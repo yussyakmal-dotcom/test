@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Status data</h1>
+{% if not configured %}<div class="flash err">Koneksi Odoo belum diisi.{% if user.role == 'admin' %} Buka <a href="/settings">Pengaturan</a>.{% else %} Hubungi admin.{% endif %}</div>{% endif %}
+<div class="card"><div class="stats">
+  <div><span class="mut">Penjualan terakhir</span><b>{{ stats.last_sale_date or '-' }}</b></div>
+  <div><span class="mut">Snapshot stok terakhir</span><b>{{ stats.last_stock_snapshot or '-' }}</b></div>
+  <div><span class="mut">Order POS</span><b>{{ stats.orders|idr }}</b></div>
+  <div><span class="mut">Baris item</span><b>{{ stats.lines|idr }}</b></div>
+  <div><span class="mut">Produk</span><b>{{ stats.products|idr }}</b></div>
+  <div><span class="mut">Toko</span><b>{{ stats.stores|idr }}</b></div>
+</div></div>
+<div class="card"><h2>5 eksekusi ETL terakhir</h2>
+<table><tr><th>#</th><th>Mulai</th><th>Selesai</th><th>Status</th><th>Sesi belum closed</th></tr>
+{% for r in runs %}<tr><td>{{ r.run_id }}</td><td>{{ r.started_at|dt }}</td><td>{{ r.finished_at|dt }}</td>
+<td><span class="tag {{ r.status }}">{{ r.status }}</span></td><td>{{ (r.details or {}).get('open_sessions', '-') }}</td></tr>
+{% else %}<tr><td colspan="5" class="mut">Belum ada eksekusi.</td></tr>{% endfor %}</table></div>
+{% endblock %}

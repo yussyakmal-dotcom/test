@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% block title %}Laporan scrap{% endblock %}
+{% block content %}
+<h1>Laporan scrap</h1>
+<div class="card">
+<form method="get" action="/reports/scrap">
+<div class="row">
+<div><label>Dari tanggal</label><input type="date" name="from" value="{{ d1 }}"></div>
+<div><label>Sampai tanggal</label><input type="date" name="to" value="{{ d2 }}"></div>
+<div><label>Toko</label><select name="store"><option value="">Semua toko</option>
+{% for s in stores %}<option value="{{ s.store_id }}" {{ 'selected' if sid == s.store_id }}>{{ s.name }}</option>{% endfor %}</select></div>
+</div>
+<p><button>Tampilkan</button>
+<a href="/reports/scrap.csv?from={{ d1 }}&to={{ d2 }}&store={{ sid if sid else '' }}"><button type="button" class="sec">Unduh CSV</button></a></p>
+<p class="mut">Satu hari: isi tanggal yang sama pada kedua kolom. Hanya scrap berstatus selesai. Nilai = qty x harga pokok standar saat data dimuat (estimasi).</p>
+</form>
+{% if mapped.m < mapped.n %}<div class="flash err">{{ mapped.n - mapped.m }} dari {{ mapped.n }} toko belum terpetakan ke lokasi stok, sehingga scrap-nya masuk "(Bukan toko)". Pastikan model stock.picking.type sudah ditarik (Status ETL, backfill).</div>{% endif %}
+</div>
+<div class="card"><h2>Ringkasan per toko, {{ d1 }} s/d {{ d2 }}</h2>
+<table><tr><th>Toko</th><th class="n">Kejadian</th><th class="n">Qty</th><th class="n">Nilai estimasi (Rp)</th></tr>
+{% for r in summary %}<tr><td>{{ r.store }}</td><td class="n">{{ r.kejadian }}</td><td class="n">{{ r.qty|num }}</td><td class="n">{{ r.nilai|idr }}</td></tr>
+{% else %}<tr><td colspan="4" class="mut">Tidak ada data scrap pada rentang ini.</td></tr>{% endfor %}
+{% if summary %}<tr><th>Total</th><th></th><th class="n">{{ total_qty|num }}</th><th class="n">{{ total_nilai|idr }}</th></tr>{% endif %}</table></div>
+<div class="card"><h2>Rincian per tanggal, toko, dan produk</h2>
+<table><tr><th>Tanggal</th><th>Toko</th><th>Produk</th><th class="n">Qty</th><th class="n">Nilai estimasi (Rp)</th></tr>
+{% for r in detail %}<tr><td>{{ r.full_date }}</td><td>{{ r.store }}</td><td>{{ r.product }}</td><td class="n">{{ r.qty|num }}</td><td class="n">{{ r.nilai|idr }}</td></tr>
+{% else %}<tr><td colspan="5" class="mut">Tidak ada data.</td></tr>{% endfor %}</table>
+{% if detail|length >= 2000 %}<p class="mut">Menampilkan 2000 baris pertama. Unduh CSV untuk data lengkap.</p>{% endif %}</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% block title %}Bahan baku dipakai di mana{% endblock %}
+{% block content %}
+<h1>Bahan baku dipakai di resep mana</h1>
+<div class="card">
+<form method="get" action="/bom/where-used">
+<label>Cari bahan (nama atau SKU; beberapa kata boleh, urutan bebas)</label>
+<input type="text" name="q" value="{{ q }}" placeholder="mis. minyak bimoli" autofocus>
+<p><button>Cari</button></p>
+</form>
+<p class="mut">Mencari di semua BOM, termasuk BOM arsip dan BOM bertingkat (bahan yang dipakai lewat sub-rakitan).
+{% if fresh %}Data BOM per {{ fresh|dt }}. Perubahan di Odoo baru terlihat setelah ETL berikutnya.{% endif %}</p>
+</div>
+
+{% if matches is not none %}
+<div class="card"><h2>Pilih bahan</h2>
+<table><tr><th>Bahan</th><th>SKU</th><th class="n">Jumlah BOM</th></tr>
+{% for m in matches %}<tr><td><a href="/bom/where-used?cid={{ m.product_id }}">{{ m.name }}</a></td><td>{{ m.sku or '' }}</td><td class="n">{{ m.boms }}</td></tr>
+{% else %}<tr><td colspan="3" class="mut">Tidak ada bahan dengan kata itu yang dipakai di BOM mana pun.</td></tr>{% endfor %}</table></div>
+{% endif %}
+
+{% if comp %}
+<div class="card">
+<h2>{{ comp.name }}{% if comp.sku %} <span class="mut">[{{ comp.sku }}]</span>{% endif %}</h2>
+{% if summary.direct == 0 and summary.finished == 0 %}
+<div class="flash ok">Tidak ada BOM yang memakai bahan ini.</div>
+{% else %}
+<div class="stats">
+<div><span class="mut">BOM yang memakai langsung</span><b>{{ summary.direct }}</b></div>
+<div><span class="mut">Produk jadi terdampak</span><b>{{ summary.finished }}</b></div>
+<div><span class="mut">Lewat sub-rakitan</span><b>{{ summary.indirect }}</b></div>
+<div><span class="mut">Di BOM arsip</span><b>{{ summary.inactive }}</b></div>
+</div>
+<p><a href="/bom/where-used.csv?cid={{ comp.product_id }}"><button type="button" class="sec">Unduh daftar tugas penggantian (CSV)</button></a></p>
+<p class="mut">Daftar ini bisa dipakai sebagai checklist saat mengganti bahan di Odoo. Setelah semua diganti dan ETL berjalan lagi, cari bahan ini kembali: hasilnya harus kosong.</p>
+{% endif %}
+</div>
+
+{% if rows %}
+{% if uom_warn %}<div class="flash err">{{ uom_warn }} baris BOM memakai satuan yang berbeda dari satuan stok produknya, padahal kebijakan Anda satuan kecil. Qty pada baris itu tidak sebanding; periksa di Odoo (lihat daftar lengkap lewat view dwh.v_bom_uom_check).</div>{% endif %}
+<div class="card"><h2>Resep yang memakai bahan ini</h2>
+<table><tr><th>Level</th><th>Produk jadi</th><th>SKU</th><th>BOM</th><th>Tipe</th><th>Status</th><th>Lewat</th><th class="n">Qty per 1 unit</th></tr>
+{% for r in rows %}<tr>
+<td>{{ r.level }}</td><td>{{ r.finished_name }}</td><td>{{ r.finished_sku or '' }}</td>
+<td>{{ r.code or ('#' ~ r.bom_id) }}</td><td>{{ r.bom_type }}</td>
+<td>{{ 'aktif' if r.is_active else 'arsip' }}</td>
+<td>{{ r.via_name if r.level > 1 else 'langsung' }}</td>
+<td class="n">{{ r.qty_per_unit|num }}</td></tr>{% endfor %}</table>
+<p class="mut">Level 1 = BOM yang memuat bahan ini langsung. Level 2 dan seterusnya = produk jadi yang memakai sub-rakitan hasil level sebelumnya.</p></div>
+
+<div class="card"><h2>Simulasi penggantian bahan</h2>
+<form method="get" action="/bom/where-used"><input type="hidden" name="cid" value="{{ comp.product_id }}">
+<div class="row"><div><label>Harga bahan pengganti (Rp per satuan)</label><input type="text" name="newprice" value="{{ newprice }}" placeholder="mis. 18500"></div>
+<div><label>1 satuan lama = berapa satuan baru</label><input type="text" name="ratio" value="{{ ratio or '1' }}"></div></div>
+<p class="mut">Harga bahan lama saat ini: Rp {{ comp.standard_price|idr }} per satuan (harga pokok standar di Odoo).</p>
+<p><button>Hitung dampak</button></p></form>
+{% if sim %}
+{% if impact %}<table><tr><th>Produk jadi (BOM utama)</th><th class="n">Qty bahan per unit</th><th class="n">HPP bahan sekarang</th><th class="n">HPP bahan baru</th><th class="n">Selisih</th><th class="n">%</th></tr>
+{% for i in impact %}<tr><td>{{ i.name }}</td><td class="n">{{ i.qty|num }}</td><td class="n">{{ i.hpp|idr }}</td><td class="n">{{ i.hpp_baru|idr }}</td>
+<td class="n">{{ i.delta|idr }}</td><td class="n">{{ i.pct|num if i.pct is not none else '-' }}</td></tr>{% endfor %}</table>
+{% else %}<p class="mut">Bahan ini tidak menjadi bahan baku akhir pada BOM utama produk mana pun, jadi tidak ada dampak yang bisa dihitung.</p>{% endif %}
+{% endif %}</div>
+{% endif %}
+{% endif %}
+{% endblock %}

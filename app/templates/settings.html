@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}Pengaturan{% endblock %}
+{% block content %}
+<h1>Pengaturan</h1>
+<form method="post" action="/settings">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="card"><h2>Lingkungan</h2>
+<label>Label lingkungan (tampil di semua halaman)</label><input type="text" name="env_label" value="{{ s.env_label }}" placeholder="UAT atau PRODUKSI" maxlength="20">
+{% if s.bound_odoo_url %}<p class="mut">Data BI ini berasal dari: <b>{{ s.bound_odoo_url }}</b>. ETL menolak berjalan jika URL Odoo diganti ke yang lain.</p>{% endif %}</div>
+<div class="card"><h2>Koneksi Odoo</h2>
+<label>URL Odoo</label><input type="text" name="odoo_url" value="{{ s.odoo_url }}" placeholder="https://namaperusahaan.odoo.com">
+<label>API key {% if s.odoo_api_key %}<span class="tag">tersimpan, terenkripsi</span>{% endif %}</label>
+<input type="password" name="odoo_api_key" autocomplete="off" placeholder="{{ 'kosongkan jika tidak diganti' if s.odoo_api_key else 'tempel API key user BI' }}">
+<label>Nama database (opsional)</label><input type="text" name="odoo_db" value="{{ s.odoo_db }}">
+<p><button class="sec" formaction="/settings/test">Test koneksi</button></p>
+<p class="mut">Gunakan API key dari user Odoo khusus BI dengan hak baca saja. Key tidak pernah ditampilkan kembali.</p></div>
+<div class="card"><h2>ETL</h2>
+<div class="row">
+<div><label>Lookback (hari)</label><input type="number" name="lookback_days" value="{{ s.lookback_days }}" min="1" max="60"></div>
+<div><label>Batch size</label><input type="number" name="batch_size" value="{{ s.batch_size }}" min="100" max="5000"></div></div>
+<label><input type="checkbox" name="require_all_closed" {{ 'checked' if s.require_all_closed == 'true' }}> Hentikan ETL jika ada sesi POS belum closed</label></div>
+<div class="card"><h2>Jadwal harian (WIB)</h2>
+<label><input type="checkbox" name="schedule_enabled" {{ 'checked' if s.schedule_enabled == 'true' }}> Aktifkan jadwal otomatis</label>
+<div class="row"><div><label>Jam</label><input type="number" name="schedule_hour" value="{{ s.schedule_hour }}" min="0" max="23"></div>
+<div><label>Menit</label><input type="number" name="schedule_minute" value="{{ s.schedule_minute }}" min="0" max="59"></div></div></div>
+<p><button>Simpan pengaturan</button></p>
+</form>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}Riwayat harga beli{% endblock %}
+{% block content %}
+<p><a href="/purchase-price?from={{ P.d1 }}&to={{ P.d2 }}">&larr; Kembali ke daftar</a></p>
+<h1>{{ prod.name }}{% if prod.sku %} <span class="mut">[{{ prod.sku }}]</span>{% endif %}</h1>
+<div class="card">
+<form method="get" action="/purchase-price/product"><input type="hidden" name="pid" value="{{ prod.product_id }}">
+<div class="row"><div><label>Dari tanggal</label><input type="date" name="from" value="{{ P.d1 }}"></div>
+<div><label>Sampai tanggal</label><input type="date" name="to" value="{{ P.d2 }}"></div></div>
+<p><button>Tampilkan</button></p></form>
+{% if stats %}
+<div class="stats">
+<div><span class="mut">Pembelian</span><b>{{ stats.n }}</b></div>
+<div><span class="mut">Harga pertama / satuan {{ prod.uom or '' }}</span><b>{{ stats.first|num }}</b></div>
+<div><span class="mut">Harga terakhir</span><b>{{ stats.last|num }}</b></div>
+<div><span class="mut">Selisih</span><b>{{ stats.delta|num }}{% if stats.pct is not none %} ({{ stats.pct|num }}%){% endif %}</b></div>
+<div><span class="mut">Terendah / tertinggi</span><b>{{ stats.pmin|num }} / {{ stats.pmax|num }}</b></div>
+</div>
+{{ chart }}
+{% else %}<p class="mut">Tidak ada pembelian yang bisa dihitung pada rentang ini.</p>{% endif %}
+</div>
+<div class="card"><h2>Rincian faktur</h2>
+<table><tr><th>Tanggal</th><th>Faktur</th><th>Supplier</th><th class="n">Qty beli</th><th class="n">Harga per satuan beli</th><th class="n">Rasio</th><th class="n">Harga per satuan kecil</th></tr>
+{% for h in hist %}<tr {% if not h.usable %}style="opacity:.6"{% endif %}>
+<td>{{ h.invoice_date }}</td><td>{{ h.bill_no }}{% if h.bill_ref %} <span class="mut">({{ h.bill_ref }})</span>{% endif %}</td><td>{{ h.supplier or '' }}</td>
+<td class="n">{{ h.qty|num }} {{ h.uom or '' }}</td><td class="n">{{ h.price_purchase|num }}</td>
+<td class="n">{{ h.ratio|num if h.ratio is not none else '-' }}{% if h.ratio_source %}<br><span class="mut">{{ h.ratio_source }}</span>{% endif %}</td>
+<td class="n">{% if h.usable %}{{ h.price_small|num }}{% else %}<span class="mut">tidak dihitung: {{ h.skip_reason }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="mut">Tidak ada faktur pada rentang ini.</td></tr>{% endfor %}</table>
+<p class="mut">Rasio = jumlah satuan kecil dalam 1 satuan beli. Sumbernya: "satuan sama" (faktur sudah dalam satuan kecil) atau "tabel konversi" (kolom Contains pada Units &amp; Packagings, mengikuti rantai satuan sampai satuan stok produk). Periksa kolom ini bila ada harga yang terlihat janggal.</p></div>
+{% endblock %}

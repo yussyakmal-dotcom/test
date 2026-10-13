@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}Laporan{% endblock %}
+{% block content %}
+<h1>Laporan ringkas</h1>
+<div class="card"><h2>Penjualan POS per toko, 14 hari terakhir</h2>
+<table><tr><th>Tanggal</th><th>Toko</th><th class="n">Order</th><th class="n">Total (Rp)</th></tr>
+{% for r in daily %}<tr><td>{{ r.full_date }}</td><td>{{ r.store }}</td><td class="n">{{ r.orders }}</td><td class="n">{{ r.total|idr }}</td></tr>
+{% else %}<tr><td colspan="4" class="mut">Belum ada data.</td></tr>{% endfor %}</table></div>
+<div class="card"><h2>10 produk teratas (7 hari terakhir, berdasarkan nilai bersih)</h2>
+<table><tr><th>Produk</th><th class="n">Qty</th><th class="n">Nilai bersih (Rp)</th></tr>
+{% for r in top %}<tr><td>{{ r.name }}</td><td class="n">{{ r.qty|idr }}</td><td class="n">{{ r.net|idr }}</td></tr>
+{% else %}<tr><td colspan="3" class="mut">Belum ada data.</td></tr>{% endfor %}</table></div>
+{% endblock %}

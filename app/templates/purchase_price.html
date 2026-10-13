@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}Perubahan harga beli{% endblock %}
+{% block content %}
+<h1>Perubahan harga beli</h1>
+<div class="card">
+<form method="get" action="/purchase-price">
+<div class="row">
+<div><label>Dari tanggal</label><input type="date" name="from" value="{{ P.d1 }}"></div>
+<div><label>Sampai tanggal</label><input type="date" name="to" value="{{ P.d2 }}"></div>
+<div><label>Cara membandingkan</label><select name="mode">
+{% for k, t in modes.items() %}<option value="{{ k }}" {{ 'selected' if P.mode == k }}>{{ t }}</option>{% endfor %}</select></div>
+</div>
+<div class="row">
+<div><label>Minimal jumlah pembelian</label><input type="text" name="min_n" value="{{ P.min_n }}"></div>
+<div><label>Hanya perubahan minimal (%)</label><input type="text" name="min_pct" value="{{ P.min_pct|num }}"></div>
+<div><label>Arah</label><select name="direction">
+{% for v, t in [('semua','Naik dan turun'),('naik','Naik saja'),('turun','Turun saja')] %}<option value="{{ v }}" {{ 'selected' if P.direction == v }}>{{ t }}</option>{% endfor %}</select></div>
+<div><label>Urutkan menurut</label><select name="sort">
+{% for v, t in [('pct','Persentase'),('nilai','Selisih per satuan (Rp)'),('dampak','Dampak (selisih x qty)')] %}<option value="{{ v }}" {{ 'selected' if P.sort == v }}>{{ t }}</option>{% endfor %}</select></div>
+</div>
+<p><button>Tampilkan</button>
+<a href="/purchase-price.csv?from={{ P.d1 }}&to={{ P.d2 }}&mode={{ P.mode }}&min_n={{ P.min_n }}&min_pct={{ P.min_pct }}&direction={{ P.direction }}&sort={{ P.sort }}"><button type="button" class="sec">Unduh CSV</button></a></p>
+<p class="mut">Harga dari <b>faktur supplier yang sudah diposting</b> (bukan harga PO), per <b>satuan kecil</b> (satuan stok), setelah diskon dan tanpa pajak. Retur/credit note tidak dihitung.
+{% if P.mode == 'periode' %}Periode pembanding: {{ P.p1 }} s/d {{ P.p2 }}.{% endif %}
+{% if fresh %} Data per {{ fresh|dt }}.{% endif %}</p>
+{% if skipped and skipped.n %}<div class="flash err">{{ skipped.n }} baris faktur ({{ skipped.produk }} produk) pada periode ini tidak ikut dihitung karena satuan di faktur tidak punya konversi ke satuan stok produk di tabel Units &amp; Packagings (misalnya kemasannya merujuk satuan lain, atau konversinya belum diisi). Perbaiki di Odoo, lalu jalankan ETL.</div>{% endif %}
+</div>
+
+<div class="card"><h2>{{ total }} produk{% if total > 300 %} (300 teratas ditampilkan; unduh CSV untuk semua){% endif %}</h2>
+<table><tr><th>Produk</th><th>Satuan</th><th class="n">Beli</th><th class="n">{{ labels[0] }}</th><th class="n">{{ labels[1] }}</th>
+<th class="n">Selisih (Rp)</th><th class="n">%</th><th class="n">Dampak (Rp)</th><th>Terakhir</th></tr>
+{% for r in rows %}<tr>
+<td><a href="/purchase-price/product?pid={{ r.product_id }}&from={{ P.d1 }}&to={{ P.d2 }}">{{ r.name }}</a>{% if r.sku %} <span class="mut">[{{ r.sku }}]</span>{% endif %}</td>
+<td>{{ r.uom or '' }}</td><td class="n">{{ r.n }}{% if r.n_sup > 1 %} <span class="mut">({{ r.n_sup }} supp.)</span>{% endif %}</td>
+<td class="n">{{ r.base|num }}</td><td class="n">{{ r.now|num }}</td>
+<td class="n" style="color:{{ 'var(--err)' if r.delta > 0 else 'var(--ok)' }}">{{ r.delta|num }}</td>
+<td class="n" style="color:{{ 'var(--err)' if r.delta > 0 else 'var(--ok)' }}">{{ r.pct|num }}</td>
+<td class="n">{{ r.dampak|idr }}</td><td>{{ r.last_date }}</td></tr>
+{% else %}<tr><td colspan="9" class="mut">Tidak ada produk yang memenuhi kriteria.</td></tr>{% endfor %}</table>
+<p class="mut">Merah = harga naik (biaya bertambah), hijau = turun. Dampak = selisih harga x total qty dibeli pada periode (perkiraan pengaruh ke biaya). Mode "rentang" menunjukkan selisih terendah-tertinggi, jadi tidak punya arah.</p></div>
+{% endblock %}

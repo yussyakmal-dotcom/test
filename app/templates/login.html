@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}Masuk{% endblock %}
+{% block content %}
+<div class="card" style="max-width:420px;margin:60px auto">
+<h1>Odoo BI {% if env_label %}<span class="env {{ 'prod' if env_label.lower().startswith('prod') else 'uat' }}">{{ env_label|upper }}</span>{% endif %}</h1>
+<form method="post" action="/login">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>Username</label><input type="text" name="username" autocomplete="username" autofocus required>
+<label>Password</label><input type="password" name="password" autocomplete="current-password" required>
+<p><button>Masuk</button></p>
+</form></div>
+{% endblock %}

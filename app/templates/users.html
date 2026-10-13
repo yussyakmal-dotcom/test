@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% block title %}User{% endblock %}
+{% block content %}
+<h1>User</h1>
+<div class="card"><h2>Tambah user</h2>
+<form method="post" action="/users/create"><input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="row"><div><label>Username</label><input type="text" name="username" required></div>
+<div><label>Peran</label><select name="role"><option value="reporting">reporting</option><option value="admin">admin</option></select></div></div>
+<p class="mut">Password sementara dibuat acak dan ditampilkan sekali; user wajib menggantinya saat login pertama.</p>
+<p><button>Buat user</button></p></form></div>
+<div class="card"><h2>Daftar user</h2>
+<table><tr><th>Username</th><th>Peran</th><th>Status</th><th>Login terakhir</th><th></th></tr>
+{% for u in users %}<tr><td>{{ u.username }}</td><td>{{ u.role }}</td>
+<td>{{ 'aktif' if u.is_active else 'nonaktif' }}{% if u.must_change_password %} <span class="tag">harus ganti password</span>{% endif %}</td>
+<td>{{ u.last_login|dt }}</td>
+<td><form class="inline" method="post" action="/users/{{ u.id }}/reset"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Reset password</button></form>
+<form class="inline" method="post" action="/users/{{ u.id }}/toggle"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">{{ 'Nonaktifkan' if u.is_active else 'Aktifkan' }}</button></form></td></tr>{% endfor %}</table></div>
+<div class="card"><h2>Audit log (30 terakhir)</h2>
+<table><tr><th>Waktu</th><th>User</th><th>Aksi</th><th>Detail</th></tr>
+{% for a in audit %}<tr><td>{{ a.ts|dt }}</td><td>{{ a.username }}</td><td>{{ a.action }}</td><td class="mut">{{ a.detail }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

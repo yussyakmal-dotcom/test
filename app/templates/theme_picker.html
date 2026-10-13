@@ -1,0 +1,10 @@
+<div class="theme-toolbar">
+  <label for="desktop-theme">Tema desktop</label>
+  <select id="desktop-theme" data-theme-picker aria-label="Pilih tema desktop">
+    <option value="system">Ikuti sistem</option>
+    <option value="light">Terang</option>
+    <option value="dark">Gelap</option>
+    <option value="ocean">Biru Laut</option>
+  </select>
+  {% if user %}<a href="/appearance" style="color:var(--pri)">Pengaturan tema</a>{% endif %}
+</div>

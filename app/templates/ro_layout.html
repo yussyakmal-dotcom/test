@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id" data-bs-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf }}">
+<title>{% block title %}Master RO{% endblock %}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  .table-wrap { max-height: 65vh; overflow-y: auto; }
+  .table-wrap thead th { position: sticky; top: 0; background: var(--bs-body-bg); z-index: 1; box-shadow: 0 1px 0 var(--bs-border-color); }
+</style>
+{% include "theme_assets.html" %}
+</head>
+<body>
+<nav class="navbar bg-body-tertiary border-bottom">
+  <div class="container-xl">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="/">&larr; Dashboard</a>
+      <span class="navbar-brand mb-0 h6">Master RO Toko</span>
+      {% if env_label %}<span class="badge {{ 'text-bg-danger' if env_label.lower().startswith('prod') else 'text-bg-warning' }}">{{ env_label|upper }}</span>{% endif %}
+      <a class="btn btn-sm btn-outline-primary" href="/ro">Form RO</a>
+      <a class="btn btn-sm {{ 'btn-primary' if active == 'template' else 'btn-outline-primary' }}" href="/ro/master/template">Master Template</a>
+      <a class="btn btn-sm {{ 'btn-primary' if active == 'jadwal' else 'btn-outline-primary' }}" href="/ro/master/jadwal">Master Jadwal</a>
+    </div>
+    <form class="d-flex align-items-center gap-2 m-0" method="post" action="/logout">
+      <span class="text-body-secondary small d-none d-sm-inline">{{ user.username }}</span>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-sm btn-outline-secondary">Keluar</button>
+    </form>
+  </div>
+</nav>
+{% include "theme_picker.html" %}
+<main class="container-xl my-3">
+  <div id="alertBox" role="alert"></div>
+  {% block content %}{% endblock %}
+</main>
+
+<script nonce="{{ csp_nonce }}">
+{% raw %}
+window.ROUI = (() => {
+  'use strict';
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const $ = (id) => document.getElementById(id);
+  // pembuat elemen: props.text, props.class, props.onclick, atribut lain; anak = node atau teks
+  function el(tag, props, ...kids) {
+    const n = document.createElement(tag);
+    Object.keys(props || {}).forEach((k) => {
+      const v = props[k];
+      if (k === 'text') n.textContent = v;
+      else if (k === 'class') n.className = v;
+      else if (k.indexOf('on') === 0) n.addEventListener(k.slice(2), v);
+      else if (v === true) n.setAttribute(k, '');
+      else if (v !== false && v != null) n.setAttribute(k, v);
+    });
+    kids.flat().forEach((c) => { if (c != null) n.append(c.nodeType ? c : document.createTextNode(String(c))); });
+    return n;
+  }
+  function showAlert(msg, kind) {
+    const box = $('alertBox');
+    box.textContent = '';
+    const div = el('div', { class: 'alert alert-' + (kind || 'danger') + ' alert-dismissible', text: msg });
+    div.appendChild(el('button', { type: 'button', class: 'btn-close', 'aria-label': 'Tutup', onclick: () => { box.textContent = ''; } }));
+    box.appendChild(div);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (kind === 'success') setTimeout(() => { if (div.isConnected) box.textContent = ''; }, 5000);
+  }
+  async function api(url, opts) {
+    opts = opts || {};
+    const method = (opts.method || 'GET').toUpperCase();
+    const headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    if (method !== 'GET') headers['X-CSRF-Token'] = csrf;
+    let res;
+    try {
+      res = await fetch(url, Object.assign({}, opts, { method: method, headers: headers, credentials: 'same-origin' }));
+    } catch (e) {
+      throw new Error('Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.');
+    }
+    if (res.redirected && /\/login/.test(res.url)) {
+      window.location.href = '/login';
+      throw new Error('Sesi berakhir. Silakan login ulang.');
+    }
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.indexOf('application/json') >= 0 ? await res.json() : { detail: await res.text() };
+    if (!res.ok) {
+      let msg = data.detail;
+      if (Array.isArray(msg)) msg = msg.map((x) => x.msg || JSON.stringify(x)).join('; ');
+      throw new Error(msg || ('Kesalahan ' + res.status));
+    }
+    return data;
+  }
+  return { $: $, el: el, api: api, showAlert: showAlert };
+})();
+{% endraw %}
+</script>
+<script nonce="{{ csp_nonce }}">
+{% block script %}{% endblock %}
+</script>
+</body>
+</html>

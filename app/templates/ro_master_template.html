@@ -1,0 +1,221 @@
+{% extends "ro_layout.html" %}
+{% block title %}Master Template RO{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Master Template RO <span class="text-body-secondary fs-6">(produk per dapur)</span></h1>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="fDapur">DAPUR</label>
+        <select class="form-select" id="fDapur"></select>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="fCari">Cari kode atau nama</label>
+        <input type="search" class="form-control" id="fCari" autocomplete="off" placeholder="mis. arem">
+      </div>
+      <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" type="button" id="btnNew">Tambah produk</button>
+        <button class="btn btn-outline-secondary" type="button" id="btnImp">Impor CSV</button>
+        <a class="btn btn-outline-secondary" id="lnkCsv" href="/api/ro/master/template.csv">Unduh CSV</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="collapse" id="boxNew">
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Tambah produk</div>
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-12 col-md-3"><label class="form-label" for="nKode">KODE ODOO</label><input type="text" class="form-control" id="nKode" maxlength="50"></div>
+        <div class="col-12 col-md-4"><label class="form-label" for="nNama">NAMA PRODUK</label><input type="text" class="form-control" id="nNama" maxlength="200"></div>
+        <div class="col-6 col-md-2"><label class="form-label" for="nGink">KODE GINK</label><input type="text" class="form-control" id="nGink" maxlength="50" placeholder="opsional"></div>
+        <div class="col-6 col-md-3"><label class="form-label" for="nDapur">DAPUR</label><select class="form-select" id="nDapur"></select></div>
+      </div>
+      <button class="btn btn-primary mt-3" type="button" id="btnAdd">Simpan produk</button>
+    </div>
+  </div>
+</div>
+
+<div class="collapse" id="boxImp">
+  <div class="card mb-3">
+    <div class="card-header fw-semibold">Impor dari CSV</div>
+    <div class="card-body">
+      <p class="small text-body-secondary mb-2">Judul kolom: <code>NAMA_PRODUK, KODE_GINK, KODE_ODOO, KODE_DAPUR</code> (KODE_GINK boleh tidak ada).
+        Pemisah koma, titik koma, atau tab. Produk yang kodenya sudah ada di dapur yang sama <b>diperbarui</b>, yang belum ada <b>ditambahkan</b>; tidak ada yang dihapus.
+        KODE_GINK yang dikosongkan tidak menghapus nilai lama. Satu file harus lolos semua baris, kalau tidak, tidak ada yang disimpan.</p>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="file" class="form-control" id="fFile" accept=".csv,.txt,text/csv" style="max-width:360px">
+        <button class="btn btn-outline-primary" type="button" id="btnCheck">Periksa saja</button>
+        <button class="btn btn-primary" type="button" id="btnDo">Impor</button>
+      </div>
+      <div id="impResult" class="mt-3"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span class="small text-body-secondary" id="info">Memuat...</span>
+    <div class="btn-group btn-group-sm">
+      <button class="btn btn-outline-secondary" type="button" id="btnPrev">&laquo; Sebelumnya</button>
+      <button class="btn btn-outline-secondary" type="button" id="btnNext">Berikutnya &raquo;</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th style="width:160px">KODE ODOO</th><th>NAMA PRODUK</th><th style="width:120px">KODE GINK</th><th style="width:150px">DAPUR</th><th style="width:170px"></th></tr></thead>
+      <tbody id="tBody"></tbody>
+    </table>
+  </div>
+</div>
+<p class="text-body-secondary small mt-2">Urutan tampil mengikuti urutan input, dan sama dengan urutan di form RO. Mengubah atau menghapus produk tidak mengubah RO yang sudah tersimpan.
+Lencana <span class="badge text-bg-warning">tidak ada di Odoo</span> berarti KODE ODOO tidak cocok dengan SKU produk hasil tarikan ETL terakhir.</p>
+{% endblock %}
+{% block script %}
+{% raw %}
+(() => {
+  'use strict';
+  const { $, el, api, showAlert } = window.ROUI;
+  const S = { page: 0, size: 100, total: 0, dapur: [], timer: null };
+
+  function query(extra) {
+    const p = new URLSearchParams({ dapur: $('fDapur').value, q: $('fCari').value.trim() });
+    Object.keys(extra || {}).forEach((k) => p.set(k, extra[k]));
+    return p.toString();
+  }
+  async function load() {
+    $('lnkCsv').href = '/api/ro/master/template.csv?' + query();
+    try {
+      const r = await api('/api/ro/master/template?' + query({ limit: S.size, offset: S.page * S.size }));
+      S.total = r.total;
+      render(r.rows);
+      const a = r.total ? S.page * S.size + 1 : 0, b = Math.min((S.page + 1) * S.size, r.total);
+      $('info').textContent = r.total ? ('Menampilkan ' + a + '-' + b + ' dari ' + r.total + ' produk') : 'Tidak ada produk.';
+      $('btnPrev').disabled = S.page === 0;
+      $('btnNext').disabled = (S.page + 1) * S.size >= r.total;
+    } catch (e) { showAlert(e.message); }
+  }
+  function render(rows) {
+    const body = $('tBody');
+    body.textContent = '';
+    if (!rows.length) {
+      body.appendChild(el('tr', {}, el('td', { colspan: 5, class: 'text-body-secondary p-3', text: 'Belum ada produk untuk filter ini.' })));
+      return;
+    }
+    rows.forEach((r) => body.appendChild(viewRow(r)));
+  }
+  function viewRow(r) {
+    const tr = el('tr', {});
+    const kode = el('td', { class: 'text-nowrap' }, r.kode_odoo);
+    if (r.odoo_ok === false) kode.appendChild(el('span', { class: 'badge text-bg-warning ms-2', text: 'tidak ada di Odoo' }));
+    tr.append(kode, el('td', { text: r.nama_produk }), el('td', { text: r.kode_gink || '' }), el('td', { text: r.kode_dapur + ' - ' + r.dapur }),
+      el('td', { class: 'text-end text-nowrap' },
+        el('button', { type: 'button', class: 'btn btn-sm btn-outline-secondary me-1', text: 'Ubah', onclick: () => editRow(tr, r) }),
+        el('button', { type: 'button', class: 'btn btn-sm btn-outline-danger', text: 'Hapus', onclick: () => remove(r) })));
+    return tr;
+  }
+  function dapurSelect(value, cls) {
+    const sel = el('select', { class: cls });
+    S.dapur.forEach((d) => sel.appendChild(el('option', { value: d.kode_dapur, text: d.kode_dapur + ' - ' + d.dapur, selected: d.kode_dapur === value })));
+    return sel;
+  }
+  function editRow(tr, r) {
+    const iKode = el('input', { type: 'text', class: 'form-control form-control-sm', value: r.kode_odoo, maxlength: 50 });
+    const iNama = el('input', { type: 'text', class: 'form-control form-control-sm', value: r.nama_produk, maxlength: 200 });
+    const iGink = el('input', { type: 'text', class: 'form-control form-control-sm', value: r.kode_gink || '', maxlength: 50 });
+    const iDapur = dapurSelect(r.kode_dapur, 'form-select form-select-sm');
+    const save = async () => {
+      try {
+        await api('/api/ro/master/template/' + r.id, { method: 'PUT', body: JSON.stringify({
+          nama_produk: iNama.value, kode_gink: iGink.value, kode_odoo: iKode.value, kode_dapur: iDapur.value }) });
+        showAlert('Produk diperbarui.', 'success');
+        load();
+      } catch (e) { showAlert(e.message); }
+    };
+    [iKode, iNama, iGink].forEach((i) => i.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') save();
+      if (ev.key === 'Escape') tr.replaceWith(viewRow(r));
+    }));
+    tr.textContent = '';
+    tr.append(el('td', {}, iKode), el('td', {}, iNama), el('td', {}, iGink), el('td', {}, iDapur),
+      el('td', { class: 'text-end text-nowrap' },
+        el('button', { type: 'button', class: 'btn btn-sm btn-primary me-1', text: 'Simpan', onclick: save }),
+        el('button', { type: 'button', class: 'btn btn-sm btn-outline-secondary', text: 'Batal', onclick: () => tr.replaceWith(viewRow(r)) })));
+    iNama.focus();
+  }
+  async function remove(r) {
+    if (!confirm('Hapus produk ' + r.kode_odoo + ' - ' + r.nama_produk + ' dari template ' + r.kode_dapur + '?')) return;
+    try {
+      await api('/api/ro/master/template/' + r.id, { method: 'DELETE' });
+      showAlert('Produk dihapus.', 'success');
+      load();
+    } catch (e) { showAlert(e.message); }
+  }
+  async function add() {
+    try {
+      await api('/api/ro/master/template', { method: 'POST', body: JSON.stringify({
+        nama_produk: $('nNama').value, kode_gink: $('nGink').value, kode_odoo: $('nKode').value, kode_dapur: $('nDapur').value }) });
+      ['nKode', 'nNama', 'nGink'].forEach((id) => { $(id).value = ''; });
+      showAlert('Produk ditambahkan.', 'success');
+      $('nKode').focus();
+      load();
+    } catch (e) { showAlert(e.message); }
+  }
+
+  // ---- impor CSV
+  async function doImport(dry) {
+    const f = $('fFile').files[0];
+    const out = $('impResult');
+    out.textContent = '';
+    if (!f) { showAlert('Pilih file CSV dulu.'); return; }
+    if (f.size > 2 * 1024 * 1024) { showAlert('File terlalu besar (maksimal 2 MB).'); return; }
+    if (!dry && !confirm('Impor sekarang? Produk yang kodenya sudah ada akan diperbarui.')) return;
+    try {
+      const r = await api('/api/ro/master/template/import', { method: 'POST', body: JSON.stringify({ text: await f.text(), dry_run: dry }) });
+      if (!r.ok) {
+        const ul = el('ul', { class: 'mb-0' });
+        r.errors.forEach((m) => ul.appendChild(el('li', { text: m })));
+        out.appendChild(el('div', { class: 'alert alert-danger mb-0' },
+          el('div', { class: 'fw-semibold mb-1', text: r.total_errors + ' masalah ditemukan, tidak ada yang disimpan' + (r.total_errors > r.errors.length ? ' (50 pertama ditampilkan)' : '') + ':' }), ul));
+        return;
+      }
+      const msg = (r.dry_run ? 'Hasil periksa: ' : 'Impor selesai: ') + r.total + ' baris valid, ' + r.baru + ' baru, ' + r.ubah + ' diperbarui.' +
+        (r.dry_run ? ' Belum ada yang disimpan; klik Impor untuk menyimpan.' : '');
+      out.appendChild(el('div', { class: 'alert alert-' + (r.dry_run ? 'info' : 'success') + ' mb-0', text: msg }));
+      if (!r.dry_run) { $('fFile').value = ''; load(); }
+    } catch (e) { showAlert(e.message); }
+  }
+
+  function toggle(id) {
+    const box = $(id);
+    box.classList.toggle('show');
+    return box.classList.contains('show');
+  }
+
+  async function init() {
+    try {
+      const m = await api('/api/ro/master');
+      S.dapur = m.dapur;
+    } catch (e) { showAlert(e.message); return; }
+    const f = $('fDapur');
+    f.appendChild(el('option', { value: '', text: 'Semua dapur' }));
+    S.dapur.forEach((d) => f.appendChild(el('option', { value: d.kode_dapur, text: d.kode_dapur + ' - ' + d.dapur })));
+    S.dapur.forEach((d) => $('nDapur').appendChild(el('option', { value: d.kode_dapur, text: d.kode_dapur + ' - ' + d.dapur })));
+
+    f.addEventListener('change', () => { S.page = 0; if (f.value) $('nDapur').value = f.value; load(); });
+    $('fCari').addEventListener('input', () => { clearTimeout(S.timer); S.timer = setTimeout(() => { S.page = 0; load(); }, 300); });
+    $('btnPrev').addEventListener('click', () => { if (S.page > 0) { S.page--; load(); } });
+    $('btnNext').addEventListener('click', () => { S.page++; load(); });
+    $('btnNew').addEventListener('click', () => { if (toggle('boxNew')) $('nKode').focus(); });
+    $('btnImp').addEventListener('click', () => toggle('boxImp'));
+    $('btnAdd').addEventListener('click', add);
+    $('btnCheck').addEventListener('click', () => doImport(true));
+    $('btnDo').addEventListener('click', () => doImport(false));
+    load();
+  }
+  init();
+})();
+{% endraw %}
+{% endblock %}
